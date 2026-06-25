@@ -1,6 +1,22 @@
 import carla
 import numpy as np
 
+
+import argparse
+
+parser = argparse.ArgumentParser(
+    description="Generate a semantic navigation mesh for the current CARLA world."
+)
+
+parser.add_argument(
+    "--visualize",
+    action="store_true",
+    help="Visualize the generated navmesh using CARLA debug points.",
+    default=False
+)
+
+args = parser.parse_args()
+
 #TODO : actor-distance filtering can be implemented later
 
 resolution = 0.5 #in meters, can tweaked for a tighter grid but will be more computationally expensive
@@ -169,10 +185,11 @@ print(f"Final safe points: {len(safe_points)}")
 np.save("navmesh.npy", safe_points)
 print(f"Saved {len(safe_points)} points to navmesh.npy")
 
-for p in safe_points:
-    world.debug.draw_point(
-        carla.Location(x=p[0], y=p[1], z=p[2]+0.05),
-        size=0.05,
-        color=carla.Color(0, 255, 0),
-        life_time=60.0
-    )
+if args.visualize == True:
+    for p in safe_points:
+        world.debug.draw_point(
+            carla.Location(x=p[0], y=p[1], z=p[2]+0.05),
+            size=0.05,
+            color=carla.Color(0, 255, 0),
+            life_time=60.0
+        )

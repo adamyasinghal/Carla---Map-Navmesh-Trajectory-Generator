@@ -17,7 +17,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-#TODO : actor-distance filtering can be implemented later
 
 resolution = 0.5 #in meters, can tweaked for a tighter grid but will be more computationally expensive
 
@@ -41,15 +40,20 @@ ALLOWED_LABELS = {
 VEHICLE_CLEARANCE = 2.5 #in meters, can be tweaked as per use
 PEDESTRIAN_CLEARANCE = 1.0 #in meters, can be tweaked as per use
 #TODO : maybe we can use bounding boxes later, it will adapt the clearance values for every vehicle and walker
-'''TODO : currrently distance to every actor per point is navmesh is used to filter out points and obtain the final navmesh
-          this can be optimized by either using a spatial hash or KD-tree
 '''
+TODO : currrently distance to every actor per point is navmesh is used to filter out points and obtain the final 
+       navmesh, this can be optimized by either using a spatial hash or KD-tree
+'''
+
+#connecting to carla and getting the map
 
 client = carla.Client('localhost', 2000)
 client.set_timeout(20.0)
 world = client.get_world()
 
 print("Connected to : ", world.get_map().name)
+
+#making the grid and removing any points where ray cast returns 0 hits since no ground exists there
 
 grid = {}
 
@@ -93,6 +97,8 @@ for x in np.arange(xmin, xmax, resolution):
 
 print(f"Total ray hits : {len(grid)}")
 
+#removing points close to untraversable objects like buildings, bench etc. to prevent collision
+
 clearance = 1.5 #in meters, can be tweaked depending on size of ego vehicle
 radius = int(np.ceil(clearance / resolution))
 
@@ -131,6 +137,11 @@ for (ix, iy), cell in grid.items():
         safe_points.append(np.concatenate((loc, normal)))
 
 safe_points = np.array(safe_points, dtype=np.float32)
+
+'''
+using actor.distance filtering to remove points close to actors (traffic cars and pedestrians) spawned by the generate_world.py 
+script since some actors may survive between two grid points in previous filtering
+'''
 
 vehicles = [
     actor for actor in world.get_actors()
@@ -186,6 +197,7 @@ np.save("navmesh.npy", safe_points)
 print(f"Saved {len(safe_points)} points to navmesh.npy")
 
 if args.visualize == True:
+    print("Visualizing... Please open the carla window...")
     for p in safe_points:
         world.debug.draw_point(
             carla.Location(x=p[0], y=p[1], z=p[2]+0.05),

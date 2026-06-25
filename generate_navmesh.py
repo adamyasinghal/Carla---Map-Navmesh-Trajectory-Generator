@@ -128,7 +128,7 @@ np.save("navmesh.npy", safe_points)
 
 for p in safe_points:
     world.debug.draw_point(
-        carla.Location(x=p[0], y=p[1], z=p[2]),
+        carla.Location(x=p[0], y=p[1], z=p[2]+0.05),
         size=0.05,
         color=carla.Color(0, 255, 0),
         life_time=60.0

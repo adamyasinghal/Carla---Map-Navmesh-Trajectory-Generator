@@ -27,7 +27,6 @@ world = client.get_world()
 
 print("Connected to : ", world.get_map().name)
 
-#valid_hits = [] #commented out for now
 grid = {}
 
 num_x = len(np.arange(xmin, xmax, resolution))
@@ -62,24 +61,11 @@ for x in np.arange(xmin, xmax, resolution):
         ix = int(round((x - xmin) / resolution))
         iy = int(round((y - ymin) / resolution))
 
-        #if label not in ALLOWED_LABELS:
-        #    continue
-        #uncomment later
-
         grid[(ix, iy)] = {
         "location": np.array([hit.location.x, hit.location.y, hit.location.z], dtype=np.float32),
         "label": label,
         "normal": np.array([hit.normal.x, hit.normal.y, hit.normal.z], dtype=np.float32),
 }
-
-        #commented out for now
-        '''
-            valid_hits.append([
-            hit.location.x,
-            hit.location.y,
-            hit.location.z
-        ])
-        '''
 
 print(f"Total ray hits : {len(grid)}")
 
@@ -125,6 +111,7 @@ print(f"Safe points: {len(safe_points)}")
 safe_points = np.array(safe_points, dtype=np.float32)
 
 np.save("navmesh.npy", safe_points)
+print(f"Saved {len(safe_points)} points to navmesh.npy")
 
 for p in safe_points:
     world.debug.draw_point(

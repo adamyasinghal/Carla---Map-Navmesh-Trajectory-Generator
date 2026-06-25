@@ -1,6 +1,8 @@
 import carla
 import numpy as np
 
+#TODO : actor-distance filtering can be implemented later
+
 resolution = 0.5 #in meters, can tweaked for a tighter grid but will be more computationally expensive
 
 #grid size, can be tweaked
@@ -20,6 +22,12 @@ ALLOWED_LABELS = {
     carla.CityObjectLabel.Parking,
     carla.CityObjectLabel.Shoulder,
 }
+VEHICLE_CLEARANCE = 2.5 #in meters, can be tweaked as per use
+PEDESTRIAN_CLEARANCE = 1.0 #in meters, can be tweaked as per use
+#TODO : maybe we can use bounding boxes later, it will adapt the clearance values for every vehicle and walker
+'''TODO : currrently distance to every actor per point is navmesh is used to filter out points and obtain the final navmesh
+          this can be optimized by either using a spatial hash or KD-tree
+'''
 
 client = carla.Client('localhost', 2000)
 client.set_timeout(20.0)
@@ -106,9 +114,57 @@ for (ix, iy), cell in grid.items():
 
         safe_points.append(np.concatenate((loc, normal)))
 
-print(f"Safe points: {len(safe_points)}")
-
 safe_points = np.array(safe_points, dtype=np.float32)
+
+vehicles = [
+    actor for actor in world.get_actors()
+    if actor.type_id.startswith("vehicle.")
+]
+
+walkers = [
+    actor for actor in world.get_actors()
+    if actor.type_id.startswith("walker.")
+]
+
+filtered_points = []
+
+for p in safe_points:
+
+    x, y, z = p[:3]
+
+    keep = True
+
+    # Check vehicles
+    for vehicle in vehicles:
+
+        loc = vehicle.get_location()
+
+        distance = np.hypot(x - loc.x, y - loc.y)
+
+        if distance < VEHICLE_CLEARANCE:
+            keep = False
+            break
+
+    if not keep:
+        continue
+
+    # Check pedestrians
+    for walker in walkers:
+
+        loc = walker.get_location()
+
+        distance = np.hypot(x - loc.x, y - loc.y)
+
+        if distance < PEDESTRIAN_CLEARANCE:
+            keep = False
+            break
+
+    if keep:
+        filtered_points.append(p)
+
+safe_points = np.array(filtered_points, dtype=np.float32)
+
+print(f"Final safe points: {len(safe_points)}")
 
 np.save("navmesh.npy", safe_points)
 print(f"Saved {len(safe_points)} points to navmesh.npy")

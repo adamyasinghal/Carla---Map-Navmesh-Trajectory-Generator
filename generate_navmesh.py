@@ -5,14 +5,22 @@ import numpy as np
 resolution = 0.5 #in meters, can tweaked for a tighter grid but will be more computationally expensive
 
 #grid size, can be tweaked
-xmin = -200 
-xmax = 200
-ymin = -200
-ymax = 200
+xmin = -300 
+xmax = 300
+ymin = -300
+ymax = 300
 
 #ray parameters
 ray_start_height = 100.0
 ray_end_height = -20.0
+
+ALLOWED_LABELS = {
+    carla.CityObjectLabel.Road,
+    carla.CityObjectLabel.Sidewalk,
+    carla.CityObjectLabel.Crosswalk,
+    carla.CityObjectLabel.Parking,
+    carla.CityObjectLabel.Shoulder,
+}
 
 carla = carla.Client('localhost', 2000)
 client.set_timeout(20.0)
@@ -48,6 +56,11 @@ for x in np.arange(xmin, xmax, resolution):
             continue
 
         hit = hits[0]
+        
+        label = hit.label
+        if label not in ALLOWED_LABELS:
+            continue
+
         valid_hits.append([
             hit.location.x,
             hit.location.y,

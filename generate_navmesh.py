@@ -78,7 +78,7 @@ for x in np.arange(xmin, xmax, resolution):
         if len(hits) == 0:
             continue
 
-        hit = hits[0]
+        hit = max(hits, key=lambda h: h.location.z)
         
         label = hit.label
 

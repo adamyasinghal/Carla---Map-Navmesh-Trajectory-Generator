@@ -55,7 +55,11 @@ def main(args):
     points_dir  = os.path.join(root, "3d_points")
     intrinsics_path = os.path.join(root, "camera_intrinsics.npy")
 
-    os.makedirs(points_dir, exist_ok=True)
+    os.makedirs(root, exist_ok=True)
+    if os.path.exists(points_dir):
+        import shutil
+        shutil.rmtree(points_dir)
+    os.makedirs(points_dir)
 
     if not os.path.isfile(intrinsics_path):
         raise FileNotFoundError(f"Intrinsics not found: {intrinsics_path}")

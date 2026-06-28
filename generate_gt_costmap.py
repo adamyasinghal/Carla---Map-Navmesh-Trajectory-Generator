@@ -223,8 +223,11 @@ def main(args):
     costmap_dir    = os.path.join(root, "costmaps")
     costraw_dir    = os.path.join(root, "costmaps_raw")
 
-    os.makedirs(costmap_dir, exist_ok=True)
-    os.makedirs(costraw_dir, exist_ok=True)
+    for d in (costmap_dir, costraw_dir):
+        if os.path.exists(d):
+            import shutil
+            shutil.rmtree(d)
+        os.makedirs(d)
 
     # ── Load shared data ──────────────────────────────────────────────────────
     if not os.path.isfile(trajectory_path):

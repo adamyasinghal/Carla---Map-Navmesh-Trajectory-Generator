@@ -309,21 +309,27 @@ def main(args):
         frame_idx = 0
 
         for wp in path_waypoints:
-            # Teleport kinematically to each waypoint on the dense 0.5 m grid.
-            # Because the grid is dense the motion appears perfectly continuous.
-            ego.set_transform(wp.transform)
-            collision_flag[0] = False   # reset before tick
+            # Reset flag and drain any leftover queue items BEFORE moving
+            collision_flag[0] = False
+            while not rgb_q.empty():
+                try: rgb_q.get_nowait()
+                except queue.Empty: break
+            while not depth_q.empty():
+                try: depth_q.get_nowait()
+                except queue.Empty: break
 
+            # Move ego and advance simulation
+            ego.set_transform(wp.transform)
             world.tick()
+            # Collision sensor callback fires during world.tick() if a collision occurred
 
             # ── Collision check ───────────────────────────────────────────────
             if collision_flag[0]:
-                # Drain sensors so queues don't fill up
-                try:
-                    rgb_q.get(timeout=1.0)
-                    depth_q.get(timeout=1.0)
-                except queue.Empty:
-                    pass
+                # Drain sensors — they still fired even though we're skipping
+                try: rgb_q.get(timeout=1.0)
+                except queue.Empty: pass
+                try: depth_q.get(timeout=1.0)
+                except queue.Empty: pass
                 print(f"[WARN] Collision at waypoint {frame_idx} – skipping frame.")
                 continue
 

@@ -30,6 +30,12 @@ import random
 import numpy as np
 import cv2
 
+import sys
+
+sys.path.append(
+    "/scratch2/adamya.singhal/carla/Carla-0.10.0-Linux-Shipping/PythonAPI/carla"
+)
+
 import carla
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 

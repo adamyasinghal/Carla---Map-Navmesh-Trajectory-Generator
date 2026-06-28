@@ -133,77 +133,57 @@ def sensor_callback(data, q: queue.Queue):
     q.put(data)
 
 
-def route_arc_length(route: list) -> float:
-    """Sum straight-line distances between consecutive route waypoints."""
-    total = 0.0
-    for i in range(1, len(route)):
-        a = route[i-1][0].transform.location
-        b = route[i  ][0].transform.location
-        total += a.distance(b)
-    return total
-
-
-def pick_anchor_waypoints(world_map: carla.Map,
-                          grp: GlobalRoutePlanner,
-                          start_wp: carla.Waypoint,
+def pick_anchor_waypoints(start_wp: carla.Waypoint,
                           n: int,
                           min_d: float,
                           max_d: float,
-                          rng: random.Random,
-                          max_tries: int = 40) -> list[carla.Waypoint]:
+                          rng: random.Random) -> list[carla.Waypoint]:
     """
-    Select n consecutive road anchors each min_d–max_d metres apart
-    (measured as route arc-length, not Euclidean distance).
+    Select n consecutive road anchors by walking the waypoint graph forward,
+    taking a RANDOM branch whenever a junction is reached.
 
-    Uses GlobalRoutePlanner so the measured distance follows the actual road,
-    guaranteeing turns are included and no impossible shortcuts are taken.
+    This guarantees:
+      - the ego always stays on drivable road surfaces
+      - turns are naturally taken whenever the road network branches
+      - arc-length between consecutive anchors is in [min_d, max_d]
+
+    Strategy
+    --------
+    From the current waypoint, walk forward 1 m at a time.
+    At every junction (len(nexts) > 1) randomly pick a branch.
+    When accumulated distance reaches a random target in [min_d, max_d],
+    record the current waypoint as the next anchor and reset the counter.
     """
-    # Pool of candidate spawn points / road waypoints to pick anchors from
-    all_wps = world_map.generate_waypoints(2.0)   # one waypoint every 2 m on all roads
-
-    anchors = []
-    current = start_wp
+    anchors  = []
+    current  = start_wp
+    STEP     = 1.0   # metres per graph step
 
     for _ in range(n):
         target_d = rng.uniform(min_d, max_d)
-        found    = None
+        walked   = 0.0
+        wp       = current
 
-        # Shuffle candidates and pick the first one whose road-distance is in range
-        candidates = rng.sample(all_wps, min(max_tries, len(all_wps)))
-        for wp in candidates:
-            # Quick Euclidean pre-filter to avoid expensive route queries
-            euc = current.transform.location.distance(wp.transform.location)
-            if euc < min_d * 0.5 or euc > max_d * 3.0:
-                continue
-            try:
-                route = grp.trace_route(current.transform.location,
-                                        wp.transform.location)
-            except Exception:
-                continue
-            if len(route) < 2:
-                continue
-            arc = route_arc_length(route)
-            if min_d <= arc <= max_d:
-                found = wp
+        while walked < target_d:
+            nexts = wp.next(STEP)
+            if not nexts:
+                print("[WARN] Road ended before reaching target distance.")
                 break
 
-        if found is None:
-            # Fallback: walk the graph forward a random distance and take whatever we land on
-            print(f"[WARN] Could not find anchor in [{min_d}, {max_d}] m — "
-                  f"walking forward randomly.")
-            wp = current
-            walked = 0.0
-            goal_d = rng.uniform(min_d, max_d)
-            while walked < goal_d:
-                nexts = wp.next(1.0)
-                if not nexts:
-                    break
-                wp = rng.choice(nexts)   # random branch at junctions
-                walked += 1.0
-            found = wp
+            if len(nexts) > 1:
+                # Junction — pick a random branch so we actually turn
+                wp = rng.choice(nexts)
+                print(f"[INFO] Junction with {len(nexts)} branches — "
+                      f"took branch yaw={wp.transform.rotation.yaw:.1f}°")
+            else:
+                wp = nexts[0]
 
-        anchors.append(found)
-        current = found
+            walked += STEP
+
+        anchors.append(wp)
+        current = wp
+        print(f"[INFO] Anchor {len(anchors)}: "
+              f"({wp.transform.location.x:.1f}, {wp.transform.location.y:.1f}) "
+              f"walked={walked:.1f} m  target={target_d:.1f} m")
 
     return anchors
 
@@ -286,33 +266,36 @@ def main(args):
         start_wp   = world_map.get_waypoint(ego.get_location(),
                                             project_to_road=True,
                                             lane_type=carla.LaneType.Driving)
-        anchors    = pick_anchor_waypoints(world_map, grp, start_wp,
+        print(f"[INFO] Start waypoint: "
+              f"({start_wp.transform.location.x:.1f}, {start_wp.transform.location.y:.1f}) "
+              f"yaw={start_wp.transform.rotation.yaw:.1f}°")
+
+        anchors    = pick_anchor_waypoints(start_wp,
                                            NUM_ANCHORS, MIN_WP_DIST, MAX_WP_DIST, rng)
         trajectory = np.array([[w.transform.location.x,
                                  w.transform.location.y,
                                  w.transform.location.z] for w in anchors],
                                dtype=np.float32)
         np.save(os.path.join(dirs["root"], "trajectory.npy"), trajectory)
-        print(f"[INFO] {len(anchors)} anchor waypoints selected and saved.")
+        print(f"[INFO] Trajectory anchor XYs: {trajectory[:, :2].tolist()}")
 
         # ── Camera intrinsics (constant) ──────────────────────────────────────
         K = make_camera_intrinsics(IMG_W, IMG_H, FOV)
         np.save(os.path.join(dirs["root"], "camera_intrinsics.npy"), K)
 
-        # ── Build dense waypoint path via GlobalRoutePlanner ─────────────────
-        # GRP returns a list of (waypoint, RoadOption) tuples following true
-        # road geometry including turns. We chain start→a1→a2→a3→a4.
+        # ── Build dense path via GRP: start → a1 → a2 → a3 → a4 ─────────────
+        # GRP returns (waypoint, RoadOption) tuples spaced ~1 m apart,
+        # following true road geometry through junctions.
         path_waypoints = []
         stops = [start_wp] + anchors
         for i in range(len(stops) - 1):
             src = stops[i].transform.location
             dst = stops[i+1].transform.location
-            route_segment = grp.trace_route(src, dst)
-            # Each element is (carla.Waypoint, RoadOption)
-            for wp, _ in route_segment:
+            segment = grp.trace_route(src, dst)
+            for wp, road_opt in segment:
                 path_waypoints.append(wp)
 
-        print(f"[INFO] Dense path has {len(path_waypoints)} waypoints.")
+        print(f"[INFO] Dense path: {len(path_waypoints)} waypoints total.")
 
         # ── Drive loop ────────────────────────────────────────────────────────
         agent_states:    list[np.ndarray] = []

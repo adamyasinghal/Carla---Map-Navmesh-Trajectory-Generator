@@ -30,12 +30,6 @@ import random
 import numpy as np
 import cv2
 
-import sys
-
-sys.path.append(
-    "/scratch2/adamya.singhal/carla/Carla-0.10.0-Linux-Shipping/PythonAPI/carla"
-)
-
 import carla
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
@@ -70,8 +64,13 @@ def build_output_dirs(base: str, scene: str) -> dict[str, str]:
         "images":       os.path.join(base, scene, "images"),
         "images_depth": os.path.join(base, scene, "images_depth"),
     }
-    for p in paths.values():
-        os.makedirs(p, exist_ok=True)
+    os.makedirs(paths["root"], exist_ok=True)
+    # Always wipe per-frame dirs so stale files from a previous run don't linger
+    for key in ("images", "images_depth"):
+        if os.path.exists(paths[key]):
+            import shutil
+            shutil.rmtree(paths[key])
+        os.makedirs(paths[key])
     return paths
 
 
@@ -201,6 +200,7 @@ def pick_anchor_waypoints(start_wp: carla.Waypoint,
 def main(args):
     dirs = build_output_dirs(args.out, args.scene)
     rng  = random.Random(args.seed)
+    print(f"[INFO] RNG seed: {args.seed}")
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(15.0)
@@ -390,5 +390,6 @@ if __name__ == "__main__":
     parser.add_argument("--port",  default=2000, type=int)
     parser.add_argument("--out",   default="out")
     parser.add_argument("--scene", default="scene_00")
-    parser.add_argument("--seed",  default=42, type=int)
+    parser.add_argument("--seed",  default=42, type=int,
+                        help="RNG seed (default: 42).")
     main(parser.parse_args())

@@ -92,6 +92,7 @@ def main(args):
             "--host", args.host,
             "--port", str(args.port),
             "--seed", str(world_seed),
+            "--walker_seed", str(world_seed),
         ]
         ok = run_step(world_cmd,
                       f"World {w+1}/{args.num_worlds} generation (seed={world_seed})",

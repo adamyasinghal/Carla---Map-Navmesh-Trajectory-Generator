@@ -125,9 +125,10 @@ def convert_scene(scene_root: str,
     # ── Build traj_data.pkl ───────────────────────────────────────────────────
     # Repo convention: position is planar (x, y); yaw is heading in radians.
     # agent_states stores yaw in degrees (CARLA convention) — convert to radians.
-    position = agent_states[:, 0:2].astype(np.float64)            # (T, 2)
-    yaw_deg  = agent_states[:, 5].astype(np.float64)               # (T,)
-    yaw_rad  = np.radians(yaw_deg)
+    position = agent_states[:, 0:2].astype(np.float64)
+    position[:, 1] = -position[:, 1]          # Y_ros = -Y_carla  (left→right handed)
+    yaw_deg  = agent_states[:, 5].astype(np.float64)
+    yaw_rad  = -np.radians(yaw_deg)           # yaw_ros = -yaw_carla
 
     traj_data = {
         "position": position,

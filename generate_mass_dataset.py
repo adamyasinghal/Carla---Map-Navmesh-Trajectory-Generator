@@ -7,7 +7,7 @@ pipeline scripts in order, for every (world, trajectory) combination:
     1. generate_world.py      — spawns static traffic + pedestrians
     2. generate_dataset.py    — OR generate_dataset_grp.py (toggle)
     3. generate_3d_points.py  — offline 3D point back-projection
-    4. generate_gt_costmaps.py — ground-truth costmap rendering
+    4. generate_gt_costmap.py — ground-truth costmap rendering
 
 Since every pipeline script is deterministic given a seed, "different worlds"
 and "different trajectories within a world" are both produced purely by
@@ -144,7 +144,7 @@ def main(args):
 
             # ── Stage 4: ground-truth costmap generation ────────────────────────
             costmap_cmd = [
-                sys.executable, "generate_gt_costmaps.py",
+                sys.executable, "generate_gt_costmap.py",
                 "--out",   args.out,
                 "--scene", scene_name,
                 "--cost",  args.cost,
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--cost", default="groundplane",
                         choices=["euclidean3d", "groundplane", "geodesic"],
-                        help="Cost type passed to generate_gt_costmaps.py. "
+                        help="Cost type passed to generate_gt_costmap.py. "
                              "Default: groundplane.")
 
     parser.add_argument("--world_seed_base", default=1000, type=int,
